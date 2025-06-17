@@ -41,4 +41,25 @@ Cada produto extraído inclui:
 ```bash
 git clone https://github.com/maabenako/kabum-scraper.git
 cd kabum-scraper
+```
 
+### 2. Instalar dependências
+```bash
+npm install axios json2csv
+```
+
+### 3. Executar o script
+```bash
+node kabum_scraper.js
+```
+---
+
+### 📁 Saída
+O resultado será salvo em um arquivo chamado:
+kabum_products.csv
+
+---
+
+### 👩‍💻 Autora
+Desenvolvido com 💙 por Marcela Nako
+🔗 [in/marcelaabe-alvim/] | 💼 [https://github.com/maabenako?tab=repositories]
