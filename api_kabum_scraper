@@ -1,0 +1,132 @@
+const axios = require('axios');
+const fs = require('fs');
+const { parse } = require('json2csv');
+
+// Random delay function
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Function to fetch Kabum products with pagination and page limit
+async function fetchKabumProducts(context, outputFile = 'kabum_products.csv') {
+    const categories = [
+        'hardware', 'perifericos', 'computadores', 'gamer', 'celular-smartphone', 
+        'TV', 'audio', 'projetores', 'espaco-gamer', 'escritorio', 'Casa Inteligente', 
+        'Tablets, iPads e E-readers', 'cameras-e-drones', 'energia', 'conectividade', 
+        'geek', 'eletrodomesticos', 'eletroportateis', 'ar-e-ventilacao', 'seguranca', 
+        'automacao', 'Telefonia Fixa', 'robotica', 'servicos-digitais', 'beneficio', 
+        'Moda', 'Ferramentas', 'Cuidados Pessoais'
+    ];
+
+    let allProducts = [];
+    const pageSize = 100; // Number of items per page
+    const maxPages = 100; // Maximum number of pages to fetch
+
+    let lastCategoryEndTime = Date.now(); // Marks the time the last category finished for delay between categories
+
+    for (let category of categories) {
+        let pageNumber = 1; // Starts from the first page
+        let hasMore = true;
+
+        // Set the query as the current category name (dynamically)
+        const query = category;
+
+        while (hasMore && pageNumber <= maxPages) {
+            // Build the URL for the current category
+            const baseUrl = `https://servicespub.prod.api.aws.grupokabum.com.br/catalog/v2/products-by-category/${category.toLowerCase().replace(/ /g, '-')}`;
+
+            // Request parameters
+            const params = {
+                query: query,
+                context: context,
+                page_number: pageNumber, // Page number
+                page_size: pageSize, // Number of products per page
+                facet_filters: '',
+                sort: 'most_searched', // Sort by most searched
+                is_prime: false,
+                payload_data: 'products_category_filters',
+                include: 'gift',
+            };
+
+            // Required headers
+            const headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                'Accept': '*/*',
+                'Accept-Language': 'pt-BR,pt;q=0.9',
+                'Origin': 'https://www.kabum.com.br',
+                'Referer': 'https://www.kabum.com.br/',
+                'Client-Id': '', // Add a valid Client-Id if needed
+                'Session': 'f5103a2ee221c4eecfff96f3ae928e10', // Update if needed
+            };
+
+            try {
+                console.log(`Requesting: ${baseUrl} with query='${query}' and context='${context}', page ${pageNumber}`);
+                
+                // Perform GET request
+                const response = await axios.get(baseUrl, { headers, params });
+
+                if (response.status === 200) {
+                    console.log(`Page ${pageNumber} of category ${category} successfully received!`);
+                    const data = response.data; // Response is in JSON format
+                    
+                    // Extract desired product information
+                    const extractedData = data.data.map(product => ({
+                        id: product.id || '',
+                        attributes: JSON.stringify(product.attributes) || '',
+                        category: category, // Add category to product
+                        url: `https://www.kabum.com.br/produto/${product.id}/${product.slug || ''}`.replace(/\/$/, ''), // Build product URL
+                    }));
+                   
+                    allProducts = allProducts.concat(extractedData);
+
+                    // Check if there are more pages
+                    if (data.data.length < pageSize) {
+                        hasMore = false; // No more pages if fewer items than pageSize
+                    } else {
+                        pageNumber++; // Otherwise, go to the next page
+                    }
+                    
+                    // Random delay between pages in the same category
+                    const randomPageDelay = Math.random() * (5000 - 3000) + 3000; // 3 to 5 seconds
+                    console.log(`Waiting ${randomPageDelay.toFixed(0)}ms before next page...`);
+                    await delay(randomPageDelay);
+                } else {
+                    console.error(`Request error for category ${category}: ${response.status}`);
+                    console.error('Response:', response.data);
+                    hasMore = false; // Stop on error
+                }
+            } catch (error) {
+                console.error(`Error fetching category ${category}:`, error.message);
+                hasMore = false; // Stop on error
+            }
+        }
+
+        // Longer delay between different categories (10–15 minutes)
+        const timeSinceLastCategoryEnd = Date.now() - lastCategoryEndTime;
+        if (timeSinceLastCategoryEnd < 200000) { // Less than 10 minutes
+            const randomCategoryDelay = Math.random() * (200000 - 100000) + 100000; // 10 to 15 minutes
+            console.log(`Waiting ${(randomCategoryDelay / 1000 / 60).toFixed(2)} minutes before switching to the next category...`);
+            await delay(randomCategoryDelay);
+        }
+        
+        // Update end time for current category
+        lastCategoryEndTime = Date.now();
+    }
+
+    // Save the collected data to CSV
+    if (allProducts.length > 0) {
+        const csv = parse(allProducts);
+        fs.writeFileSync(outputFile, csv, 'utf8');
+        console.log(`Data saved to file ${outputFile}.`);
+    } else {
+        console.log('No products were collected.');
+    }
+}
+
+// Example usage
+const context = 'category';
+fetchKabumProducts(context)
+    .then(() => {
+        console.log('Script executed successfully!');
+    })
+    .catch(error => console.error('Execution error:', error));
